@@ -25,83 +25,91 @@ CHANNEL_ID = "@Future_Deals"
 def analyze_symbol(symbol):
     logger.info(f"Analyzing symbol: {symbol}")
 
-    # جلب بيانات فريم ساعة واحدة لاكتشاف الصفقات وتحديد نقاط الدخول والخروج
-    klines_url_1h = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1h&limit=100"
+    # جلب بيانات فريم 15 دقيقة لاكتشاف الصفقات وتحديد نقاط الدخول والخروج
+    klines_url_15m = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=15m&limit=100"
     try:
-        klines_response_1h = requests.get(klines_url_1h)
-        klines_response_1h.raise_for_status()
+        klines_response_15m = requests.get(klines_url_15m)
+        klines_response_15m.raise_for_status()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching 1h data for {symbol}: {e}")
+        logger.error(f"Error fetching 15m data for {symbol}: {e}")
         return None
 
-    klines_data_1h = klines_response_1h.json()
-    if not klines_data_1h:
+    klines_data_15m = klines_response_15m.json()
+    if not klines_data_15m:
         logger.warning(f"No data returned for {symbol}")
         return None
 
-    df_1h = pd.DataFrame(klines_data_1h, columns=["time", "open", "high", "low", "close", "volume", "close_time", "quote_asset_volume", "number_of_trades", "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"])
-    df_1h["close"] = pd.to_numeric(df_1h["close"])
-    df_1h["high"] = pd.to_numeric(df_1h["high"])
-    df_1h["low"] = pd.to_numeric(df_1h["low"])
+    df_15m = pd.DataFrame(klines_data_15m, columns=["time", "open", "high", "low", "close", "volume", "close_time", "quote_asset_volume", "number_of_trades", "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"])
+    df_15m["close"] = pd.to_numeric(df_15m["close"])
+    df_15m["high"] = pd.to_numeric(df_15m["high"])
+    df_15m["low"] = pd.to_numeric(df_15m["low"])
 
     # إضافة المؤشرات الفنية
-    df_1h["ema_9"] = ta.ema(df_1h["close"], length=9)
-    df_1h["ema_21"] = ta.ema(df_1h["close"], length=21)
-    df_1h["rsi"] = ta.rsi(df_1h["close"], length=14)
-    df_1h["volume"] = df_1h["volume"]
+    df_15m["ema_9"] = ta.ema(df_15m["close"], length=9)
+    df_15m["ema_21"] = ta.ema(df_15m["close"], length=21)
+    df_15m["rsi"] = ta.rsi(df_15m["close"], length=14)
+    df_15m["volume"] = df_15m["volume"]
     
     # حساب مؤشر بولينجر باندز
-    bbands = ta.bbands(df_1h["close"], length=20, std=2)
-    df_1h["bollinger_upper"] = bbands["BBU_20_2.0"]
-    df_1h["bollinger_middle"] = bbands["BBM_20_2.0"]
-    df_1h["bollinger_lower"] = bbands["BBL_20_2.0"]
+    bbands = ta.bbands(df_15m["close"], length=20, std=2)
+    df_15m["bollinger_upper"] = bbands["BBU_20_2.0"]
+    df_15m["bollinger_middle"] = bbands["BBM_20_2.0"]
+    df_15m["bollinger_lower"] = bbands["BBL_20_2.0"]
 
     # حساب مؤشر MACD
-    macd = ta.macd(df_1h["close"], fast=12, slow=26, signal=9)
-    df_1h["macd"] = macd["MACD_12_26_9"]
-    df_1h["macd_signal"] = macd["MACDs_12_26_9"]
-    df_1h["macd_hist"] = macd["MACDh_12_26_9"]
+    macd = ta.macd(df_15m["close"], fast=12, slow=26, signal=9)
+    df_15m["macd"] = macd["MACD_12_26_9"]
+    df_15m["macd_signal"] = macd["MACDs_12_26_9"]
+    df_15m["macd_hist"] = macd["MACDh_12_26_9"]
 
-    close_price = df_1h["close"].iloc[-1]
+    close_price = df_15m["close"].iloc[-1]
 
     # طباعة القيم المستخدمة في التحليل لتصحيح الأخطاء
-    logger.info(f"Symbol: {symbol}, EMA9: {df_1h['ema_9'].iloc[-1]}, EMA21: {df_1h['ema_21'].iloc[-1]}, RSI: {df_1h['rsi'].iloc[-1]}, Close: {close_price}, BB Lower: {df_1h['bollinger_lower'].iloc[-1]}, BB Upper: {df_1h['bollinger_upper'].iloc[-1]}")
+    logger.info(f"Symbol: {symbol}, EMA9: {df_15m['ema_9'].iloc[-1]}, EMA21: {df_15m['ema_21'].iloc[-1]}, RSI: {df_15m['rsi'].iloc[-1]}, Close: {close_price}, BB Lower: {df_15m['bollinger_lower'].iloc[-1]}, BB Upper: {df_15m['bollinger_upper'].iloc[-1]}")
 
-    # تحديد مستويات الدعم والمقاومة على فريم ساعة واحدة
-    support_1h = df_1h["low"].min()
-    resistance_1h = df_1h["high"].max()
+    # تحديد مستويات الدعم والمقاومة على فريم 15 دقيقة
+    support_15m = df_15m["low"].min()
+    resistance_15m = df_15m["high"].max()
 
     # تحديد الصفقات بناءً على المؤشرات
-    if df_1h["ema_9"].iloc[-1] > df_1h["ema_21"].iloc[-1] and df_1h["rsi"].iloc[-1] < 55 and close_price <= df_1h["bollinger_lower"].iloc[-1]:
+    if df_15m["ema_9"].iloc[-1] > df_15m["ema_21"].iloc[-1] and df_15m["rsi"].iloc[-1] < 55 and close_price <= df_15m["bollinger_lower"].iloc[-1]:
         entry = close_price
-        stop_loss = support_1h - (support_1h * 0.01)  # إيقاف الخسارة بعد الدعم
-        take_profit = resistance_1h - (resistance_1h * 0.01)  # أخذ الربح قبل المقاومة
+        stop_loss = support_15m - (support_15m * 0.01)  # إيقاف الخسارة بعد الدعم
+        take_profit1 = entry + (resistance_15m - entry) * 0.33  # الهدف الأول
+        take_profit2 = entry + (resistance_15m - entry) * 0.66  # الهدف الثاني
+        take_profit3 = resistance_15m - (resistance_15m * 0.01)  # الهدف الثالث
         logger.info(f"Buy signal for {symbol}")
         return {
             "symbol": symbol,
             "price": close_price,
             "side": "شراء 🟢",
             "entry": round(entry, 4),
-            "take_profit": round(take_profit, 4),
+            "take_profit1": round(take_profit1, 4),
+            "take_profit2": round(take_profit2, 4),
+            "take_profit3": round(take_profit3, 4),
             "stop_loss": round(stop_loss, 4),
-            "support": support_1h,
-            "resistance": resistance_1h,
+            "support": support_15m,
+            "resistance": resistance_15m,
             "trend": "صاعد 📈"
         }
-    elif df_1h["ema_9"].iloc[-1] < df_1h["ema_21"].iloc[-1] and df_1h["rsi"].iloc[-1] > 45 and close_price >= df_1h["bollinger_upper"].iloc[-1]:
+    elif df_15m["ema_9"].iloc[-1] < df_15m["ema_21"].iloc[-1] and df_15m["rsi"].iloc[-1] > 45 and close_price >= df_15m["bollinger_upper"].iloc[-1]:
         entry = close_price
-        stop_loss = resistance_1h + (resistance_1h * 0.01)  # إيقاف الخسارة بعد المقاومة
-        take_profit = support_1h + (support_1h * 0.01)  # أخذ الربح قبل الدعم
+        stop_loss = resistance_15m + (resistance_15m * 0.01)  # إيقاف الخسارة بعد المقاومة
+        take_profit1 = entry - (entry - support_15m) * 0.33  # الهدف الأول
+        take_profit2 = entry - (entry - support_15m) * 0.66  # الهدف الثاني
+        take_profit3 = support_15m + (support_15m * 0.01)  # الهدف الثالث
         logger.info(f"Sell signal for {symbol}")
         return {
             "symbol": symbol,
             "price": close_price,
             "side": "بيع 🔴",
             "entry": round(entry, 4),
-            "take_profit": round(take_profit, 4),
+            "take_profit1": round(take_profit1, 4),
+            "take_profit2": round(take_profit2, 4),
+            "take_profit3": round(take_profit3, 4),
             "stop_loss": round(stop_loss, 4),
-            "support": support_1h,
-            "resistance": resistance_1h,
+            "support": support_15m,
+            "resistance": resistance_15m,
             "trend": "هابط 📉"
         }
     logger.info(f"No signal for {symbol}")
@@ -148,7 +156,9 @@ async def send_signals(context: ContextTypes.DEFAULT_TYPE):
                 f"📈 <b>الجانب</b>: {signal['side']}\n"
                 f"💰 <b>السعر الحالي</b>: {signal['price']:.4f}\n"
                 f"🚀 <b>سعر الدخول</b>: {signal['entry']:.4f}\n"
-                f"🎯 <b>أخذ الربح</b>: {signal['take_profit']:.4f}\n"
+                f"🎯 <b>أخذ الربح 1</b>: {signal['take_profit1']:.4f}\n"
+                f"🎯 <b>أخذ الربح 2</b>: {signal['take_profit2']:.4f}\n"
+                f"🎯 <b>أخذ الربح 3</b>: {signal['take_profit3']:.4f}\n"
                 f"🛑 <b>إيقاف الخسارة</b>: {signal['stop_loss']:.4f}\n"
                 f"📉 <b>الدعم</b>: {signal['support']:.4f}\n"
                 f"📈 <b>المقاومة</b>: {signal['resistance']:.4f}\n"
@@ -158,7 +168,9 @@ async def send_signals(context: ContextTypes.DEFAULT_TYPE):
             plt.figure(figsize=(10, 5))
             plt.plot(signal['price'], label='Price')
             plt.axhline(y=signal['entry'], color='g', linestyle='--', label='Entry')
-            plt.axhline(y=signal['take_profit'], color='b', linestyle='--', label='Take Profit')
+            plt.axhline(y=signal['take_profit1'], color='b', linestyle='--', label='Take Profit 1')
+            plt.axhline(y=signal['take_profit2'], color='b', linestyle='--', label='Take Profit 2')
+            plt.axhline(y=signal['take_profit3'], color='b', linestyle='--', label='Take Profit 3')
             plt.axhline(y=signal['stop_loss'], color='r', linestyle='--', label='Stop Loss')
             plt.legend()
             plt.title(f"{signal['symbol']} - {signal['side']}")
@@ -201,7 +213,9 @@ async def get_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📈 <b>الجانب</b>: {signal['side']}\n"
                 f"💰 <b>السعر الحالي</b>: {signal['price']:.4f}\n"
                 f"🚀 <b>سعر الدخول</b>: {signal['entry']:.4f}\n"
-                f"🎯 <b>أخذ الربح</b>: {signal['take_profit']:.4f}\n"
+                f"🎯 <b>أخذ الربح 1</b>: {signal['take_profit1']:.4f}\n"
+                f"🎯 <b>أخذ الربح 2</b>: {signal['take_profit2']:.4f}\n"
+                f"🎯 <b>أخذ الربح 3</b>: {signal['take_profit3']:.4f}\n"
                 f"🛑 <b>إيقاف الخسارة</b>: {signal['stop_loss']:.4f}\n"
                 f"📉 <b>الدعم</b>: {signal['support']:.4f}\n"
                 f"📈 <b>المقاومة</b>: {signal['resistance']:.4f}\n"
@@ -211,7 +225,9 @@ async def get_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
             plt.figure(figsize=(10, 5))
             plt.plot(signal['price'], label='Price')
             plt.axhline(y=signal['entry'], color='g', linestyle='--', label='Entry')
-            plt.axhline(y=signal['take_profit'], color='b', linestyle='--', label='Take Profit')
+            plt.axhline(y=signal['take_profit1'], color='b', linestyle='--', label='Take Profit 1')
+            plt.axhline(y=signal['take_profit2'], color='b', linestyle='--', label='Take Profit 2')
+            plt.axhline(y=signal['take_profit3'], color='b', linestyle='--', label='Take Profit 3')
             plt.axhline(y=signal['stop_loss'], color='r', linestyle='--', label='Stop Loss')
             plt.legend()
             plt.title(f"{signal['symbol']} - {signal['side']}")
@@ -235,7 +251,9 @@ async def get_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📈 <b>الجانب</b>: {signal['side']}\n"
                 f"💰 <b>السعر الحالي</b>: {signal['price']:.4f}\n"
                 f"🚀 <b>سعر الدخول</b>: {signal['entry']:.4f}\n"
-                f"🎯 <b>أخذ الربح</b>: {signal['take_profit']:.4f}\n"
+                f"🎯 <b>أخذ الربح 1</b>: {signal['take_profit1']:.4f}\n"
+                f"🎯 <b>أخذ الربح 2</b>: {signal['take_profit2']:.4f}\n"
+                f"🎯 <b>أخذ الربح 3</b>: {signal['take_profit3']:.4f}\n"
                 f"🛑 <b>إيقاف الخسارة</b>: {signal['stop_loss']:.4f}\n"
                 f"📉 <b>الدعم</b>: {signal['support']:.4f}\n"
                 f"📈 <b>المقاومة</b>: {signal['resistance']}\n"
@@ -283,4 +301,4 @@ app.add_handler(CommandHandler("get_signals", get_signals))
 app.add_handler(CommandHandler("start_sending_signals", start_sending_signals))
 app.add_handler(CommandHandler("stop_sending_signals", stop_sending_signals))
 
-app.run_polling()   
+app.run_polling()
